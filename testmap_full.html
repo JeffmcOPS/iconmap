@@ -1,0 +1,375 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Testmap for KML files</title>
+  <style>
+    html, body, #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+    table {width: 100%}
+    tr,th,td {text-align: left;}
+    th {width: 30%}
+  </style>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.15/esri/css/main.css">
+  <script src="https://js.arcgis.com/4.15/"></script>
+
+  <script>
+    // go get all the required elements first
+    require([
+      "esri/Map",
+      "esri/Basemap",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+      "esri/symbols/SimpleMarkerSymbol",
+      "esri/widgets/Search",
+      "esri/widgets/LayerList",
+      "esri/widgets/LayerList/LayerListViewModel",
+      "esri/layers/KMLLayer",
+      "esri/symbols/WebStyleSymbol",
+      "esri/widgets/Fullscreen",
+      "esri/widgets/Expand"
+    ], function(Map, Basemap,MapView, FeatureLayer, SimpleMarkerSymbol,Search,LayerList,LayerListVM,KMLLayer,WebStyleSymbol,Fullscreen,Expand) {
+
+// KML LAYERS FIRST ------------------------------------
+
+
+
+// service levels KML
+var serviceLayer = new KMLLayer({
+  title: "5010 Service Levels",
+  url: "https://www.arcgis.com/sharing/rest/content/items/b56066dfd0454872b7c308c1b70ebb33/data"// url to the service
+});
+
+serviceLayer.maxScale = 0;  // no max zoom limit
+serviceLayer.minScale = 3000000; // must be zoomed in past 1:3,000,000
+serviceLayer.opacity = 0.5;
+serviceLayer.visible = false; // default for layerlist
+
+
+// non LTE hexagons 
+
+var nonLTELayer = new KMLLayer({
+  title: "Areas with no LTE access",
+  url: "https://www.arcgis.com/sharing/rest/content/items/d61995f7b7e043e4b6e1892f4ff2342d/data"// url to the service
+});
+
+nonLTELayer.maxScale = 0;
+nonLTELayer.minScale = 3000000; // must be zoomed in past 1:3,000,000
+nonLTELayer.opacity = 0.5;
+nonLTELayer.visible = false;
+
+
+
+//Ontario hexagonal grid
+ var hexLayer = new KMLLayer({
+  title: "Ontario hexagonal grid",
+  url: "https://www.arcgis.com/sharing/rest/content/items/7df6f52e24b245afb1c74f43cb3e9201/data"// url to the service
+});
+
+hexLayer.maxScale = 0;
+hexLayer.minScale = 3000000; // must be zoomed in past 1:3,000,000 
+hexLayer.visible = false;
+
+// /KML LAYERS ----------------------------------------------------
+
+
+
+// create the map
+      var map = new Map({
+        basemap: "streets",
+        layers: [hexLayer, nonLTELayer, serviceLayer] // controls layerlist order too
+      });
+
+// create the viewport
+      var view = new MapView({
+      container: "viewDiv",
+      map: map,
+      center: [-79, 45], // longitude, latitude
+      zoom: 7
+    });
+
+// add new stuff here
+
+
+
+// UI Components
+
+// search widget
+const searchWidget = new Search({view: view});
+
+view.ui.add(searchWidget, "top-right");
+
+// full screen widget
+fullscreen = new Fullscreen({
+  view: view
+});
+view.ui.add(fullscreen, "top-left");
+
+// layer list
+var layerList = new LayerList({
+  container: document.createElement("div"),
+  view: view,
+  listItemCreatedFunction: defineActions  // for opacity function in the layer list
+});
+
+layerListExpand = new Expand({
+  expandIconClass: "esri-icon-layer-list",  // see https://developers.arcgis.com/javascript/latest/guide/esri-icon-font/
+  // expandTooltip: "Expand LayerList", // optional, defaults to "Expand" for English locale
+  view: view,
+  content: layerList.domNode
+});
+
+// add actions to the layer list (opacity in this case)
+function defineActions(event) {
+  // The event object contains an item property.
+  // it is a ListItem referencing the associated layer
+  // and other properties. You can control the visibility of the
+  // item, its title, and actions using this object.
+
+  var item = event.item;
+
+if (item.title === "5010 Service Levels") {
+    // An array of objects defining actions to place in the LayerList.
+    // By making this array two-dimensional, you can separate similar
+    // actions into separate groups with a breaking line.
+
+    item.actionsSections = [
+      [
+        {
+          title: "Increase opacity",
+          className: "esri-icon-up",
+          id: "increase-opacity"
+        },
+        {
+          title: "Decrease opacity",
+          className: "esri-icon-down",
+          id: "decrease-opacity"
+        }
+      ]
+    ];
+  }
+
+}  // end defineAction function
+
+layerList.on("trigger-action", function(event) {
+  // The layer visible in the view at the time of the trigger.
+
+  var visibleLayer = serviceLayer.visible ? serviceLayer : serviceLayer;
+  
+// let result = condition ? value1 : value2;
+//The condition is evaluated: if it’s truthy then value1 is returned, otherwise – value2.
+
+
+  // Capture the action id.
+  var id = event.action.id;
+
+
+   if (id === "increase-opacity") {
+    // If the increase-opacity action is triggered, then
+    // increase the opacity of the GroupLayer by 0.25.
+
+    if (serviceLayer.opacity < 1) {
+      serviceLayer.opacity += 0.25;
+    }
+  } else if (id === "decrease-opacity") {
+    // If the decrease-opacity action is triggered, then
+    // decrease the opacity of the GroupLayer by 0.25.
+
+    if (serviceLayer.opacity > 0) {
+      serviceLayer.opacity -= 0.25;
+    }
+  }
+});
+
+
+
+
+// add the layer list widget
+view.ui.add(layerList, {position: "top-right"});
+
+view.ui.add(layerListExpand, "top-right");
+
+
+
+
+
+// Map layers: symbol > renderer > popups layer > feature layer
+
+
+
+// HOSPITALS -----------------------------------
+
+var hospitalSymbol = new WebStyleSymbol({
+  name: "cross-3",
+  styleName: "Esri2DPointSymbolsStyle"
+});
+
+// renderer for feature layer
+var hospitalsRenderer = {
+       type: "simple",
+       symbol: {
+              type: "web-style",
+              name: "cross-3",
+              styleName: "Esri2DPointSymbolsStyle"
+            }
+      };
+
+// template for popups 
+  var popupHospitalsLayer = {
+    "title": "{Label}",
+    "content":   "<table><tr><th>Address</th><td>{Address}</td></tr><tr><th>City</th><td>{City}</td></tr><tr><th>Postal Code</th><td>{PostalCode}</td></tr><tr><th>Type</th><td>{FKey}</td></tr></table>"
+  };
+  
+// feature layer
+
+     var hospitalsLayer = new FeatureLayer({
+        url: "https://services8.arcgis.com/xAjAvcVLYynnNcQ7/arcgis/rest/services/Hospitals/FeatureServer",
+        renderer: hospitalsRenderer,
+        popupTemplate: popupHospitalsLayer
+      });
+
+    hospitalsLayer.maxScale = 0;
+    //hospitalsLayer.minScale = 3000000;
+    hospitalsLayer.visible = false;
+
+
+      map.add(hospitalsLayer);
+
+// /HOSPITALS ------------------------------------------
+
+// PUBLIC SCHOOLS ----------------------------------------
+
+// create the symbols 
+const SecondarySchoolSym = {
+  type: "simple-marker", 
+  color: "#336699", 
+  width: 1,
+  style: "circle",
+  size:"10px",
+};
+
+const ElemSchoolSym = {
+  type: "simple-marker", 
+  color: "#33cc33", 
+  width: 1,
+  style: "circle",
+  size:"10px",
+};
+
+// create the renderer for the featurelayer
+const schoolsRenderer = {
+    type: "unique-value",
+    field: "School_Level",
+    defaultSymbol: SecondarySchoolSym,
+      uniqueValueInfos: [
+      {
+          value: "Secondary",
+          symbol: SecondarySchoolSym
+      },
+      {
+        value: "Elementary",
+        symbol: ElemSchoolSym
+      }
+    ]
+};
+
+
+// template for popups (for the public schools layer)
+  var popuppublicSchoolsLayer = {
+    "title": "{School_Name}",
+    "content":   "</table><table><tr><th>School Type</th><td>{School_Type}</td></tr><tr><th>Language</th><td>{School_Language}</td></tr><tr><th>Level</th><td>{School_Level}</td></tr><tr><th>Grades</th><td>{Grade_Range}</td></tr><tr><th>Street</th><td>{Street}</td></tr><tr><th>City</th><td>{City}</td></tr><tr><th>Postal Code</th><td>{Postal_Code}</td></tr><tr><th>Municipality</th><td>{Municipality}</td></tr><tr><th>Enrolment</th><td>{Enrolment}</td></tr><tr><th>School Board</th><td>{Board_Name}</td></tr><tr><th>Board Type</th><td>{Board_Type}</td></tr></table>"
+  }
+
+
+      var publicSchoolsLayer = new FeatureLayer({
+        url: "https://services8.arcgis.com/xAjAvcVLYynnNcQ7/arcgis/rest/services/Public_Schools/FeatureServer",
+        renderer: schoolsRenderer,
+        popupTemplate: popuppublicSchoolsLayer
+      });
+
+      publicSchoolsLayer.maxScale = 0;
+      //publicSchoolsLayer.minScale = 3000000; 
+      publicSchoolsLayer.visible = false;
+
+      map.add(publicSchoolsLayer);
+
+// /PUBLIC SCHOOLS ----------------------------------------
+
+// PUBLIC LIBRARIES ----------------------------------------
+
+var librarySymbol = new WebStyleSymbol({
+  name: "library",
+  styleName: "Esri2DPointSymbolsStyle"
+});
+
+// renderer for feature layer
+
+var librariesRenderer = {
+       type: "simple",
+       symbol: {
+              type: "web-style",
+              name: "library",
+              styleName: "Esri2DPointSymbolsStyle"
+            }
+      };
+
+// template for popups 
+  var popuplibrariesLayer = {
+    "title": "{orgName}",
+    "content":   "<table><tr><th>Address</th><td>{Address}</td></tr><tr><th>City</th><td>{City}</td></tr></table>"
+  };
+  
+// feature layer
+
+     var librariesLayer = new FeatureLayer({
+        url: "https://services8.arcgis.com/xAjAvcVLYynnNcQ7/arcgis/rest/services/Public_Libraries/FeatureServer",
+        renderer: librariesRenderer,
+        popupTemplate: popuplibrariesLayer
+      });
+
+        librariesLayer.maxScale = 0;
+       // librariesLayer.minScale = 3000000; // must be zoomed in past 1:2,000,000
+        librariesLayer.visible = false;
+
+      map.add(librariesLayer);
+
+// / PUBLIC LIBRARIES --------------------------------------
+
+
+// FIRST NATIONS -------------------------------------------
+
+  var popupfirstNationsLayer = {
+    "title": "First Nations Reserve",
+    "content":   "{Name1}"
+  };
+  
+// feature layer
+
+     var firstNationsLayer = new FeatureLayer({
+        url: "https://services8.arcgis.com/xAjAvcVLYynnNcQ7/arcgis/rest/services/First_Nations_Reserves/FeatureServer",
+        //renderer: firstNationsRenderer,
+        popupTemplate: popupfirstNationsLayer
+      });
+
+     firstNationsLayer.visible = false;
+
+      map.add(firstNationsLayer);
+
+// /FIRST NATIONS ------------------------------------------
+
+
+// end of main script
+  });
+  </script>
+
+
+</head>
+<body>
+  <div id="viewDiv"></div>
+</body>
+</html>
